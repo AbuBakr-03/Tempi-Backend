@@ -8,6 +8,13 @@ django = "*"
 djangorestframework = "*"
 djoser = "*"
 djangorestframework-simplejwt = "*"
+django-cors-headers = "*"
+pillow = "*"
+dotenv = "*"
+psycopg = "*"
+psycopg2-binary = "*"
+django-storages = {extras = ["s3"], version = "*"}
+python-decouple = "*"
 
 [dev-packages]
 
