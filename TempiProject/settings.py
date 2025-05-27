@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "djoser",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
+    "storages",
 ]
 
 MIDDLEWARE = [
@@ -128,6 +129,7 @@ CLOUDFLARE_R2_CONFIG_OPTIONS = {
     "endpoint_url": CLOUDFLARE_R2_BUCKET_ENDPOINT,
     "default_acl": "public-read",
     "signature_version": "s3v4",
+    
 }
 
 STORAGES = {
@@ -141,7 +143,7 @@ STORAGES = {
     },
 }
 
-MEDIA_URL = "/media/"
+MEDIA_URL = f"https://{CLOUDFLARE_R2_BUCKET}.{CLOUDFLARE_R2_BUCKET_ENDPOINT.split('//')[1]}/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 

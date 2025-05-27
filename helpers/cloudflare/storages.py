@@ -9,3 +9,4 @@ class StaticFileStorage(S3Storage):
 class MediaFileStorage(S3Storage):
     # helpers.cloudflare.storages.MediaFileStorage
     location = "media"
+    file_overwrite = False  # This prevents overwrites
