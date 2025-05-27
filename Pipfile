@@ -15,6 +15,7 @@ psycopg = "*"
 psycopg2-binary = "*"
 django-storages = {extras = ["s3"], version = "*"}
 python-decouple = "*"
+gunicorn = "*"
 
 [dev-packages]
 
