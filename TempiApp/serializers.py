@@ -3,13 +3,22 @@ from django.contrib.auth.models import Group, User
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from djoser.serializers import UserCreateSerializer
-from .models import UserProfile
+from .models import UserProfile, Category, Company, JobType, Job, Wishlist
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
-        fields = ["name", "bio", "location", "phone_number", "profile_picture"]
+        fields = [
+            "name",
+            "bio",
+            "skill",
+            "experience",
+            "location",
+            "phone_number",
+            "profile_picture",
+            "resume",
+        ]
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -59,3 +68,64 @@ class CustomUserCreateSerializer(UserCreateSerializer):
             group = Group.objects.get(name=group_name)
             user.groups.add(group)
         return user
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = "__all__"
+
+
+class CompanySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Company
+        fields = "__all__"
+
+
+class JobTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = JobType
+        fields = "__all__"
+
+
+class JobSerializer(serializers.ModelSerializer):
+    category = CategorySerializer(read_only=True)
+    company = CompanySerializer(read_only=True)
+    job_type = JobTypeSerializer(read_only=True)
+    category_id = serializers.IntegerField(write_only=True)
+    company_id = serializers.IntegerField(write_only=True)
+    job_type_id = serializers.IntegerField(write_only=True)
+    recruiter = serializers.HiddenField(default=serializers.CurrentUserDefault())
+
+    class Meta:
+        model = Job
+        fields = [
+            "id",
+            "title",
+            "location",
+            "pay",
+            "description",
+            "qualifications",
+            "responsibilities",
+            "nice_to_haves",
+            "start_date",
+            "end_date",
+            "start_time",
+            "end_time",
+            "category_id",
+            "category",
+            "company_id",
+            "company",
+            "job_type_id",
+            "job_type",
+            "recruiter",
+        ]
+
+
+class WishlistSerializer(serializers.ModelSerializer):
+    job = JobSerializer(read_only=True)
+    job_id = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = Wishlist
+        fields = ["id", "job_id", "job"]
