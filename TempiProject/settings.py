@@ -18,8 +18,12 @@ SECRET_KEY = config("DJANGO_SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config("DJANGO_DEBUG", cast=bool, default=False)
 
-ALLOWED_HOSTS = [config("RENDER_EXTERNAL_HOSTNAME", default="localhost")]
 
+RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+ALLOWED_HOSTS = ["localhost"]
+
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 # Application definition
 
@@ -130,7 +134,6 @@ CLOUDFLARE_R2_CONFIG_OPTIONS = {
     "endpoint_url": CLOUDFLARE_R2_BUCKET_ENDPOINT,
     "default_acl": "public-read",
     "signature_version": "s3v4",
-    
 }
 
 STORAGES = {
