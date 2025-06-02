@@ -12,6 +12,8 @@ from .models import (
     Wishlist,
     Application,
     Status,
+    JobAssignmentStatus,
+    JobAssignment,
 )
 
 
@@ -164,3 +166,31 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "job",
             "job_id",
         ]
+
+
+class JobAssignmentStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = JobAssignmentStatus
+        fields = "__all__"
+
+
+class JobAssignmentSerializer(serializers.ModelSerializer):
+    job = JobSerializer(read_only=True)
+    user = CustomUserSerializer(read_only=True)
+    application = ApplicationSerializer(read_only=True)
+
+    class Meta:
+        model = JobAssignment
+        fields = [
+            "id",
+            "user",
+            "job",
+            "application",
+            "status",
+        ]
+
+
+class JobAssignmentUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = JobAssignment
+        fields = ["status"]

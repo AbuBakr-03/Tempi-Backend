@@ -92,6 +92,30 @@ class Application(models.Model):
         ]
 
 
+class JobAssignmentStatus(models.Model):
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+
+class JobAssignment(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    job = models.ForeignKey(Job, on_delete=models.CASCADE)
+    application = models.OneToOneField(Application, on_delete=models.CASCADE)
+    status = models.ForeignKey(JobAssignmentStatus, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ("user", "job")
+        indexes = [
+            models.Index(fields=["user"]),
+            models.Index(fields=["job"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}"
+
+
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=100, blank=True, null=True)

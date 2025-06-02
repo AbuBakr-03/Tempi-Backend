@@ -13,6 +13,9 @@ from .serializers import (
     WishlistSerializer,
     ApplicationSerializer,
     StatusSerializer,
+    JobAssignmentSerializer,
+    JobAssignmentStatusSerializer,
+    JobAssignmentUpdateSerializer,
 )
 from .models import (
     UserProfile,
@@ -23,6 +26,8 @@ from .models import (
     Wishlist,
     Application,
     Status,
+    JobAssignmentStatus,
+    JobAssignment,
 )
 
 from django_filters.rest_framework import DjangoFilterBackend
@@ -124,7 +129,7 @@ class SingleJobTypeView(generics.RetrieveUpdateDestroyAPIView):
         return [permissions.IsAdminUser()]
 
 
-class JobView(generics.ListCreateAPIView):
+class JobView(generics.ListAPIView):
     queryset = Job.objects.select_related("category", "company", "job_type").all()
     serializer_class = JobSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -138,14 +143,40 @@ class JobView(generics.ListCreateAPIView):
         return [permissions.IsAdminUser()]
 
 
-class SingleJobView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Job.objects.select_related("category", "company", "job_type").all()
+class DashboardJobView(generics.ListCreateAPIView):
     serializer_class = JobSerializer
+    permission_classes = [isRecruiter()]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ["category__name", "company__name", "job_type__name", "location"]
+    search_fields = ["title"]
+    ordering_fields = ["start_date", "pay"]
 
-    def get_permissions(self):
-        if self.request.method == "GET":
-            return []
-        return [permissions.IsAdminUser()]
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            queryset = Job.objects.select_related(
+                "category", "company", "job_type"
+            ).all()
+            return queryset
+        elif self.request.user.groups.filter(name="Recruiter").exists():
+            queryset = Job.objects.select_related(
+                "category", "company", "job_type"
+            ).filter(recruiter=self.request.user)
+
+
+class SingleDashboardJobView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = JobSerializer
+    permission_classes = [isRecruiter()]
+
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            queryset = Job.objects.select_related(
+                "category", "company", "job_type"
+            ).all()
+            return queryset
+        elif self.request.user.groups.filter(name="Recruiter").exists():
+            queryset = Job.objects.select_related(
+                "category", "company", "job_type"
+            ).filter(recruiter=self.request.user)
 
 
 class WishlistView(generics.ListCreateAPIView):
@@ -245,6 +276,12 @@ class SingleApplicationView(generics.RetrieveUpdateDestroyAPIView):
             updated_application = serializer.save()
             current_application_id = updated_application.id
             if updated_application.status.id == 2:
+                JobAssignment.objects.get_or_create(
+                    user=updated_application.user,
+                    job=updated_application.job,
+                    application=updated_application,
+                    status=JobAssignmentStatus.objects.get(pk=1),
+                )
                 other_applications = Application.objects.filter(
                     job=updated_application.job
                 ).exclude(id=current_application_id)
@@ -253,4 +290,76 @@ class SingleApplicationView(generics.RetrieveUpdateDestroyAPIView):
     def perform_destroy(self, instance):
         user = self.request.user
         if user.is_staff or instance.job.recruiter == user:
+            if hasattr(instance, "assignment"):
+                instance.assignment.delete()
             instance.delete()
+
+
+class JobAssignmentStatusView(generics.ListCreateAPIView):
+    queryset = JobAssignmentStatus.objects.all()
+    serializer_class = JobAssignmentStatusSerializer
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return []
+        return [permissions.IsAdminUser()]
+
+
+class SingleJobAssignmentStatusView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = JobAssignmentStatus.objects.all()
+    serializer_class = JobAssignmentStatusSerializer
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return []
+        return [permissions.IsAdminUser()]
+
+
+class JobAssignmentView(generics.ListAPIView):
+    serializer_class = JobAssignmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ["status"]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            # Admin can see all assignments
+            return JobAssignment.objects.select_related(
+                "user", "job", "application"
+            ).all()
+        elif user.groups.filter(name="Recruiter").exists():
+            # Recruiters can see assignments for jobs they created
+            return JobAssignment.objects.select_related(
+                "user", "job", "application"
+            ).filter(job__recruiter=user)
+        else:
+            # Regular users can only see their own assignments
+            return JobAssignment.objects.select_related(
+                "user", "job", "application"
+            ).filter(user=user)
+
+
+class SingleJobAssignmentView(generics.RetrieveUpdateAPIView):
+    serializer_class = JobAssignmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.request.method in ["PUT", "PATCH"]:
+            return JobAssignmentUpdateSerializer
+        return JobAssignmentSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return JobAssignment.objects.select_related(
+                "user", "job", "application"
+            ).all()
+        elif user.groups.filter(name="Recruiter").exists():
+            return JobAssignment.objects.select_related(
+                "user", "job", "application"
+            ).filter(job__recruiter=user)
+        else:
+            return JobAssignment.objects.select_related(
+                "user", "job", "application"
+            ).filter(user=user)

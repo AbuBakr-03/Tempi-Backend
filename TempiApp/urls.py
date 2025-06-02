@@ -17,9 +17,23 @@ urlpatterns = [
     path("job-type/", views.JobTypeView.as_view()),
     path("job-type/<int:pk>/", views.SingleJobTypeView.as_view()),
     path("job/", views.JobView.as_view()),
-    path("job/<int:pk>/", views.SingleJobView.as_view()),
+    path("dashboard-job/", views.DashboardJobView.as_view()),
+    path("dashboard-job/<int:pk>", views.SingleDashboardJobView.as_view()),
     path("wishlist/", views.WishlistView.as_view()),
     path("wishlist/<int:pk>/", views.SingleWishlistView.as_view()),
     path("application", views.ApplicationView.as_view()),
     path("application/<int:pk>/", views.SingleApplicationView.as_view()),
+    path("assignments/", views.JobAssignmentView.as_view()),
+    path(
+        "assignments/<int:pk>/",
+        views.SingleJobAssignmentView.as_view(),
+    ),
+    path(
+        "assignments-status/",
+        views.JobAssignmentStatusView.as_view(),
+    ),
+    path(
+        "assignments-status/<int:pk>/",
+        views.SingleJobAssignmentStatusView.as_view(),
+    ),
 ]
