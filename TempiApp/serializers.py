@@ -3,7 +3,16 @@ from django.contrib.auth.models import Group, User
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from djoser.serializers import UserCreateSerializer
-from .models import UserProfile, Category, Company, JobType, Job, Wishlist
+from .models import (
+    UserProfile,
+    Category,
+    Company,
+    JobType,
+    Job,
+    Wishlist,
+    Application,
+    Status,
+)
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -129,3 +138,29 @@ class WishlistSerializer(serializers.ModelSerializer):
     class Meta:
         model = Wishlist
         fields = ["id", "job_id", "job"]
+
+
+class StatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Status
+        fields = "__all__"
+
+
+class ApplicationSerializer(serializers.ModelSerializer):
+    status = StatusSerializer(read_only=True)
+    job = JobSerializer(read_only=True)
+    job_id = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = Application
+        fields = [
+            "id",
+            "name",
+            "email",
+            "phone_number",
+            "location",
+            "resume",
+            "status",
+            "job",
+            "job_id",
+        ]

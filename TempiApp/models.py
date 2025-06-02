@@ -69,6 +69,29 @@ class Wishlist(models.Model):
         ]
 
 
+class Status(models.Model):
+    name = models.CharField(max_length=255)
+
+
+class Application(models.Model):
+    name = models.CharField(max_length=255)
+    email = models.EmailField(max_length=255)
+    phone_number = models.CharField(max_length=255)
+    location = models.CharField(max_length=255)
+    status = models.ForeignKey(Status, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    job = models.ForeignKey(Job, on_delete=models.CASCADE)
+    resume = models.FileField(upload_to="resumes/", blank=True, null=True)
+
+    class Meta:
+        unique_together = ("user", "job")
+        indexes = [
+            models.Index(fields=["user"]),
+            models.Index(fields=["job"]),
+            models.Index(fields=["status"]),
+        ]
+
+
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=100, blank=True, null=True)

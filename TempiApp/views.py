@@ -11,8 +11,19 @@ from .serializers import (
     JobSerializer,
     JobTypeSerializer,
     WishlistSerializer,
+    ApplicationSerializer,
+    StatusSerializer,
 )
-from .models import UserProfile, Category, Company, Job, JobType, Wishlist
+from .models import (
+    UserProfile,
+    Category,
+    Company,
+    Job,
+    JobType,
+    Wishlist,
+    Application,
+    Status,
+)
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -158,3 +169,88 @@ class SingleWishlistView(generics.RetrieveDestroyAPIView):
         return Wishlist.objects.select_related("job", "user").filter(
             user=self.request.user
         )
+
+
+class StatusView(generics.ListCreateAPIView):
+    queryset = Status.objects.all()
+    serializer_class = StatusSerializer
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return []
+        return [permissions.IsAdminUser()]
+
+
+class SingleStatusView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Status.objects.all()
+    serializer_class = StatusSerializer
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return []
+        return [permissions.IsAdminUser()]
+
+
+class ApplicationView(generics.ListCreateAPIView):
+    serializer_class = ApplicationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            queryset = Application.objects.select_related("user", "job", "status").all()
+            return queryset
+        elif self.request.user.groups.filter(name="Recruiter").exists():
+            queryset = Application.objects.select_related(
+                "user", "job", "status"
+            ).filter(job__recruiter=self.request.user)
+            return queryset
+        else:
+            queryset = Application.objects.select_related(
+                "user", "job", "status"
+            ).filter(user=self.request.user)
+            return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user, status=Status.objects.get(pk=1))
+
+
+class SingleApplicationView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ApplicationSerializer
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [permissions.IsAuthenticated()]
+        return [isRecruiter()]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            queryset = Application.objects.select_related("user", "job", "status").all()
+            return queryset
+        elif user.groups.filter(name="Recruiter").exists():
+            queryset = Application.objects.select_related(
+                "user", "job", "status"
+            ).filter(job__recruiter=user)
+            return queryset
+        else:
+            queryset = Application.objects.select_related(
+                "user", "job", "status"
+            ).filter(user=user)
+            return queryset
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        application = self.get_object()
+        if user.is_staff or application.job.recruiter == user:
+            updated_application = serializer.save()
+            current_application_id = updated_application.id
+            if updated_application.status.id == 2:
+                other_applications = Application.objects.filter(
+                    job=updated_application.job
+                ).exclude(id=current_application_id)
+                other_applications.update(status_id=3)  # Moved inside the if block
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if user.is_staff or instance.job.recruiter == user:
+            instance.delete()

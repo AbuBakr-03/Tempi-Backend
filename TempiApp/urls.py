@@ -20,4 +20,6 @@ urlpatterns = [
     path("job/<int:pk>/", views.SingleJobView.as_view()),
     path("wishlist/", views.WishlistView.as_view()),
     path("wishlist/<int:pk>/", views.SingleWishlistView.as_view()),
+    path("application", views.ApplicationView.as_view()),
+    path("application/<int:pk>/", views.SingleApplicationView.as_view()),
 ]
