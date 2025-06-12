@@ -161,6 +161,7 @@ class DashboardJobView(generics.ListCreateAPIView):
             queryset = Job.objects.select_related(
                 "category", "company", "job_type"
             ).filter(recruiter=self.request.user)
+            return queryset
 
 
 class SingleDashboardJobView(generics.RetrieveUpdateDestroyAPIView):
@@ -177,6 +178,7 @@ class SingleDashboardJobView(generics.RetrieveUpdateDestroyAPIView):
             queryset = Job.objects.select_related(
                 "category", "company", "job_type"
             ).filter(recruiter=self.request.user)
+            return queryset
 
 
 class WishlistView(generics.ListCreateAPIView):
@@ -363,3 +365,5 @@ class SingleJobAssignmentView(generics.RetrieveUpdateAPIView):
             return JobAssignment.objects.select_related(
                 "user", "job", "application"
             ).filter(user=user)
+
+                

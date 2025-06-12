@@ -117,7 +117,7 @@ class JobAssignment(models.Model):
 
 
 class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
     name = models.CharField(max_length=100, blank=True, null=True)
     bio = models.TextField(max_length=500, blank=True, null=True)
     skill = models.TextField(max_length=500, blank=True, null=True)
@@ -133,16 +133,20 @@ class UserProfile(models.Model):
         return f"{self.user.username}'s Profile"
 
 
-# Signal to automatically create/update user profile
+# Signal to automatically create user profile
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
-        UserProfile.objects.create(user=instance)
+        UserProfile.objects.get_or_create(user=instance)
 
 
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):
-    if hasattr(instance, "profile"):
-        instance.profile.save()
-    else:
-        UserProfile.objects.create(user=instance)
+    # Use get_or_create to avoid duplicate key errors
+    profile, created = UserProfile.objects.get_or_create(user=instance)
+    if not created and hasattr(instance, "profile"):
+        try:
+            instance.profile.save()
+        except Exception:
+            # If there's any issue, just pass
+            pass
