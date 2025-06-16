@@ -5,9 +5,9 @@ from django.contrib.auth.models import User
 from .serializers import (
     CustomTokenObtainPairSerializer,
     UserProfileSerializer,
+    CompanyProfileSerializer,
     CustomUserSerializer,
     CategorySerializer,
-    CompanySerializer,
     JobSerializer,
     JobTypeSerializer,
     WishlistSerializer,
@@ -19,8 +19,8 @@ from .serializers import (
 )
 from .models import (
     UserProfile,
+    CompanyProfile,
     Category,
-    Company,
     Job,
     JobType,
     Wishlist,
@@ -39,11 +39,21 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 
 class CurrentUserProfileView(generics.RetrieveUpdateAPIView):
-    serializer_class = UserProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
-    queryset = UserProfile.objects.all()
+
+    def get_serializer_class(self):
+        if self.request.user.groups.filter(name="Company").exists():
+            return CompanyProfileSerializer
+        return UserProfileSerializer
+
+    def get_queryset(self):
+        if self.request.user.groups.filter(name="Company").exists():
+            return CompanyProfile.objects.all()
+        return UserProfile.objects.all()
 
     def get_object(self):
+        if self.request.user.groups.filter(name="Company").exists():
+            return self.request.user.company_profile
         return self.request.user.profile
 
 
@@ -61,32 +71,11 @@ class DetailedOtherUserProfileView(generics.RetrieveAPIView):
     queryset = User.objects.all()
 
 
-class isRecruiter(permissions.BasePermission):
+class IsCompany(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user and (
-            request.user.is_staff
-            or request.user.groups.filter(name="Recruiter").exists()
+            request.user.is_staff or request.user.groups.filter(name="Company").exists()
         )
-
-
-class CompanyView(generics.ListCreateAPIView):
-    queryset = Company.objects.all()
-    serializer_class = CompanySerializer
-
-    def get_permissions(self):
-        if self.request.method == "GET":
-            return []
-        return [permissions.IsAdminUser()]
-
-
-class SingleCompanyView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Company.objects.all()
-    serializer_class = CompanySerializer
-
-    def get_permissions(self):
-        if self.request.method == "GET":
-            return []
-        return [permissions.IsAdminUser()]
 
 
 class CategoryView(generics.ListCreateAPIView):
@@ -133,21 +122,29 @@ class JobView(generics.ListAPIView):
     queryset = Job.objects.select_related("category", "company", "job_type").all()
     serializer_class = JobSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ["category__name", "company__name", "job_type__name", "location"]
+    filterset_fields = [
+        "category__name",
+        "company__company_profile__name",
+        "job_type__name",
+        "location",
+    ]
     search_fields = ["title"]
     ordering_fields = ["start_date", "pay"]
 
     def get_permissions(self):
-        if self.request.method == "GET":
-            return []
-        return [permissions.IsAdminUser()]
+        return []
 
 
 class DashboardJobView(generics.ListCreateAPIView):
     serializer_class = JobSerializer
-    permission_classes = [isRecruiter()]
+    permission_classes = [IsCompany()]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ["category__name", "company__name", "job_type__name", "location"]
+    filterset_fields = [
+        "category__name",
+        "company__company_profile__name",
+        "job_type__name",
+        "location",
+    ]
     search_fields = ["title"]
     ordering_fields = ["start_date", "pay"]
 
@@ -157,16 +154,16 @@ class DashboardJobView(generics.ListCreateAPIView):
                 "category", "company", "job_type"
             ).all()
             return queryset
-        elif self.request.user.groups.filter(name="Recruiter").exists():
+        elif self.request.user.groups.filter(name="Company").exists():
             queryset = Job.objects.select_related(
                 "category", "company", "job_type"
-            ).filter(recruiter=self.request.user)
+            ).filter(company=self.request.user)
             return queryset
 
 
 class SingleDashboardJobView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = JobSerializer
-    permission_classes = [isRecruiter()]
+    permission_classes = [IsCompany()]
 
     def get_queryset(self):
         if self.request.user.is_staff:
@@ -174,10 +171,10 @@ class SingleDashboardJobView(generics.RetrieveUpdateDestroyAPIView):
                 "category", "company", "job_type"
             ).all()
             return queryset
-        elif self.request.user.groups.filter(name="Recruiter").exists():
+        elif self.request.user.groups.filter(name="Company").exists():
             queryset = Job.objects.select_related(
                 "category", "company", "job_type"
-            ).filter(recruiter=self.request.user)
+            ).filter(company=self.request.user)
             return queryset
 
 
@@ -232,10 +229,10 @@ class ApplicationView(generics.ListCreateAPIView):
         if self.request.user.is_staff:
             queryset = Application.objects.select_related("user", "job", "status").all()
             return queryset
-        elif self.request.user.groups.filter(name="Recruiter").exists():
+        elif self.request.user.groups.filter(name="Company").exists():
             queryset = Application.objects.select_related(
                 "user", "job", "status"
-            ).filter(job__recruiter=self.request.user)
+            ).filter(job__company=self.request.user)
             return queryset
         else:
             queryset = Application.objects.select_related(
@@ -253,17 +250,17 @@ class SingleApplicationView(generics.RetrieveUpdateDestroyAPIView):
     def get_permissions(self):
         if self.request.method == "GET":
             return [permissions.IsAuthenticated()]
-        return [isRecruiter()]
+        return [IsCompany()]
 
     def get_queryset(self):
         user = self.request.user
         if user.is_staff:
             queryset = Application.objects.select_related("user", "job", "status").all()
             return queryset
-        elif user.groups.filter(name="Recruiter").exists():
+        elif user.groups.filter(name="Company").exists():
             queryset = Application.objects.select_related(
                 "user", "job", "status"
-            ).filter(job__recruiter=user)
+            ).filter(job__company=user)
             return queryset
         else:
             queryset = Application.objects.select_related(
@@ -274,7 +271,7 @@ class SingleApplicationView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         user = self.request.user
         application = self.get_object()
-        if user.is_staff or application.job.recruiter == user:
+        if user.is_staff or application.job.company == user:
             updated_application = serializer.save()
             current_application_id = updated_application.id
             if updated_application.status.id == 2:
@@ -287,11 +284,11 @@ class SingleApplicationView(generics.RetrieveUpdateDestroyAPIView):
                 other_applications = Application.objects.filter(
                     job=updated_application.job
                 ).exclude(id=current_application_id)
-                other_applications.update(status_id=3)  # Moved inside the if block
+                other_applications.update(status_id=3)
 
     def perform_destroy(self, instance):
         user = self.request.user
-        if user.is_staff or instance.job.recruiter == user:
+        if user.is_staff or instance.job.company == user:
             if hasattr(instance, "assignment"):
                 instance.assignment.delete()
             instance.delete()
@@ -330,11 +327,11 @@ class JobAssignmentView(generics.ListAPIView):
             return JobAssignment.objects.select_related(
                 "user", "job", "application"
             ).all()
-        elif user.groups.filter(name="Recruiter").exists():
-            # Recruiters can see assignments for jobs they created
+        elif user.groups.filter(name="Company").exists():
+            # Companies can see assignments for jobs they created
             return JobAssignment.objects.select_related(
                 "user", "job", "application"
-            ).filter(job__recruiter=user)
+            ).filter(job__company=user)
         else:
             # Regular users can only see their own assignments
             return JobAssignment.objects.select_related(
@@ -357,13 +354,39 @@ class SingleJobAssignmentView(generics.RetrieveUpdateAPIView):
             return JobAssignment.objects.select_related(
                 "user", "job", "application"
             ).all()
-        elif user.groups.filter(name="Recruiter").exists():
+        elif user.groups.filter(name="Company").exists():
             return JobAssignment.objects.select_related(
                 "user", "job", "application"
-            ).filter(job__recruiter=user)
+            ).filter(job__company=user)
         else:
             return JobAssignment.objects.select_related(
                 "user", "job", "application"
             ).filter(user=user)
 
-                
+
+# New view for company listings
+class CompanyView(generics.ListAPIView):
+    """Public view to list all companies"""
+
+    queryset = User.objects.filter(groups__name="Company").select_related(
+        "company_profile"
+    )
+    serializer_class = CustomUserSerializer
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ["company_profile__name", "company_profile__industry"]
+    ordering_fields = ["company_profile__name", "company_profile__established_date"]
+
+    def get_permissions(self):
+        return []
+
+
+class SingleCompanyView(generics.RetrieveAPIView):
+    """Public view to get a single company's details"""
+
+    queryset = User.objects.filter(groups__name="Company").select_related(
+        "company_profile"
+    )
+    serializer_class = CustomUserSerializer
+
+    def get_permissions(self):
+        return []

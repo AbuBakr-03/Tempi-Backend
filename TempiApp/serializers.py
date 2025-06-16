@@ -5,8 +5,8 @@ from rest_framework import serializers
 from djoser.serializers import UserCreateSerializer
 from .models import (
     UserProfile,
+    CompanyProfile,
     Category,
-    Company,
     JobType,
     Job,
     Wishlist,
@@ -32,12 +32,36 @@ class UserProfileSerializer(serializers.ModelSerializer):
         ]
 
 
+class CompanyProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CompanyProfile
+        fields = [
+            "name",
+            "logo",
+            "description",
+            "website",
+            "location",
+            "phone_number",
+            "email",
+            "established_date",
+            "employee_count",
+            "industry",
+        ]
+
+
 class CustomUserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(read_only=True)
+    company_profile = CompanyProfileSerializer(read_only=True)
+    user_type = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "profile"]
+        fields = ["id", "username", "email", "profile", "company_profile", "user_type"]
+
+    def get_user_type(self, obj):
+        if obj.groups.filter(name="Company").exists():
+            return "company"
+        return "user"
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -46,7 +70,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         token["is_staff"] = user.is_staff
         token["is_superuser"] = user.is_superuser
-        token["is_recruiter"] = user.groups.filter(name="Recruiter").exists()
+        token["is_company"] = user.groups.filter(name="Company").exists()
         return token
 
     def validate(self, attrs):
@@ -87,26 +111,31 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class CompanySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Company
-        fields = "__all__"
-
-
 class JobTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = JobType
         fields = "__all__"
 
 
+class CompanyBasicSerializer(serializers.ModelSerializer):
+    """Basic company info for use in job listings"""
+
+    name = serializers.CharField(source="company_profile.name", read_only=True)
+    logo = serializers.ImageField(source="company_profile.logo", read_only=True)
+    location = serializers.CharField(source="company_profile.location", read_only=True)
+
+    class Meta:
+        model = User
+        fields = ["id", "name", "logo", "location"]
+
+
 class JobSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
-    company = CompanySerializer(read_only=True)
+    company = CompanyBasicSerializer(read_only=True)
     job_type = JobTypeSerializer(read_only=True)
     category_id = serializers.IntegerField(write_only=True)
-    company_id = serializers.IntegerField(write_only=True)
+    company_id = serializers.IntegerField(write_only=True, required=False)
     job_type_id = serializers.IntegerField(write_only=True)
-    recruiter = serializers.HiddenField(default=serializers.CurrentUserDefault())
 
     class Meta:
         model = Job
@@ -129,8 +158,12 @@ class JobSerializer(serializers.ModelSerializer):
             "company",
             "job_type_id",
             "job_type",
-            "recruiter",
         ]
+
+    def create(self, validated_data):
+        # Set the company to the current user (who should be a company user)
+        validated_data["company"] = self.context["request"].user
+        return super().create(validated_data)
 
 
 class WishlistSerializer(serializers.ModelSerializer):
