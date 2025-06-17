@@ -99,9 +99,20 @@ class CustomUserCreateSerializer(UserCreateSerializer):
         group_name = validated_data.get("group")
         validated_data.pop("group", None)
         user = super().create(validated_data)
+
         if group_name:
             group = Group.objects.get(name=group_name)
             user.groups.add(group)
+
+            # Create appropriate profile after group assignment
+            if group_name == "Company":
+                CompanyProfile.objects.get_or_create(user=user)
+            else:
+                UserProfile.objects.get_or_create(user=user)
+        else:
+            # Create regular user profile for users without group
+            UserProfile.objects.get_or_create(user=user)
+
         return user
 
 

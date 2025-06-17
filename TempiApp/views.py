@@ -364,7 +364,7 @@ class SingleJobAssignmentView(generics.RetrieveUpdateAPIView):
             ).filter(user=user)
 
 
-# New view for company listings
+# Company endpoints for public listing
 class CompanyView(generics.ListAPIView):
     """Public view to list all companies"""
 

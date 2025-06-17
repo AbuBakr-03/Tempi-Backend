@@ -1,8 +1,6 @@
 # TempiApp/models.py
 from django.db import models
 from django.contrib.auth.models import User
-from django.db.models.signals import post_save
-from django.dispatch import receiver
 
 
 class CompanyProfile(models.Model):
@@ -45,9 +43,7 @@ class Job(models.Model):
     location = models.CharField(max_length=255)
     pay = models.DecimalField(max_digits=6, decimal_places=2)
     description = models.TextField(max_length=1000)
-    qualifications = models.TextField(
-        max_length=1000
-    )  # Fixed typo from 'qualification'
+    qualifications = models.TextField(max_length=1000)
     responsibilities = models.TextField(max_length=1000)
     nice_to_haves = models.TextField(max_length=1000)
     start_date = models.DateField()
@@ -55,7 +51,6 @@ class Job(models.Model):
     start_time = models.TimeField()
     end_time = models.TimeField()
     job_type = models.ForeignKey(JobType, on_delete=models.CASCADE, null=None)
-    # Changed: Now references the company user instead of separate Company model
     company = models.ForeignKey(
         User,
         related_name="company_jobs",
@@ -63,7 +58,6 @@ class Job(models.Model):
         limit_choices_to={"groups__name": "Company"},
     )
     category = models.ForeignKey(Category, on_delete=models.CASCADE, null=None)
-    # Removed recruiter field since company users will create jobs directly
 
     class Meta:
         indexes = [
@@ -156,35 +150,4 @@ class UserProfile(models.Model):
         return f"{self.user.username}'s Profile"
 
 
-# Signal to automatically create user profile for regular users
-@receiver(post_save, sender=User)
-def create_user_profile(sender, instance, created, **kwargs):
-    if created:
-        # Check if user is in Company group
-        if instance.groups.filter(name="Company").exists():
-            # Create company profile instead of user profile
-            CompanyProfile.objects.get_or_create(user=instance)
-        else:
-            # Create regular user profile
-            UserProfile.objects.get_or_create(user=instance)
-
-
-@receiver(post_save, sender=User)
-def save_user_profile(sender, instance, **kwargs):
-    # Handle both user profile and company profile
-    if instance.groups.filter(name="Company").exists():
-        # Handle company profile
-        profile, created = CompanyProfile.objects.get_or_create(user=instance)
-        if not created and hasattr(instance, "company_profile"):
-            try:
-                instance.company_profile.save()
-            except Exception:
-                pass
-    else:
-        # Handle regular user profile
-        profile, created = UserProfile.objects.get_or_create(user=instance)
-        if not created and hasattr(instance, "profile"):
-            try:
-                instance.profile.save()
-            except Exception:
-                pass
+# No signals needed - profile creation is handled in the serializer
