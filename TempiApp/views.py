@@ -67,6 +67,7 @@ class DetailedCurrentUserProfileView(generics.RetrieveAPIView):
 
 
 class DetailedOtherUserProfileView(generics.RetrieveAPIView):
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = CustomUserSerializer
     queryset = User.objects.all()
 
@@ -137,7 +138,7 @@ class JobView(generics.ListAPIView):
 
 class DashboardJobView(generics.ListCreateAPIView):
     serializer_class = JobSerializer
-    permission_classes = [IsCompany()]
+    permission_classes = [IsCompany]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = [
         "category__name",
@@ -163,7 +164,7 @@ class DashboardJobView(generics.ListCreateAPIView):
 
 class SingleDashboardJobView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = JobSerializer
-    permission_classes = [IsCompany()]
+    permission_classes = [IsCompany]
 
     def get_queryset(self):
         if self.request.user.is_staff:
@@ -249,8 +250,8 @@ class SingleApplicationView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_permissions(self):
         if self.request.method == "GET":
-            return [permissions.IsAuthenticated()]
-        return [IsCompany()]
+            return [permissions.IsAuthenticated]
+        return [IsCompany]
 
     def get_queryset(self):
         user = self.request.user
