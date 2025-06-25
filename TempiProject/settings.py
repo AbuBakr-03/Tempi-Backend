@@ -40,7 +40,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "storages",
-    "django_filters"
+    "django_filters",
 ]
 
 MIDDLEWARE = [
@@ -83,7 +83,7 @@ WSGI_APPLICATION = "TempiProject.wsgi.application"
 # Add these at the top of your settings.py
 import os
 from dotenv import load_dotenv
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qsl
 
 load_dotenv()
 
@@ -98,6 +98,7 @@ DATABASES = {
         "PASSWORD": tmpPostgres.password,
         "HOST": tmpPostgres.hostname,
         "PORT": 5432,
+        "OPTIONS": dict(parse_qsl(tmpPostgres.query)),
     }
 }
 
