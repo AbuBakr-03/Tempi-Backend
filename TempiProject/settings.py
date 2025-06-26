@@ -3,18 +3,20 @@ from pathlib import Path
 from datetime import timedelta
 import os
 from dotenv import load_dotenv
-from urllib.parse import urlparse, parse_qsl
+from urllib.parse import urlparse
 from decouple import config
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config("DJANGO_DEBUG", cast=bool, default=False)
+
 
 RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
 ALLOWED_HOSTS = ["localhost"]
@@ -23,6 +25,7 @@ if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 # Application definition
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -69,7 +72,22 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "TempiProject.wsgi.application"
 
-# Database configuration
+
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.sqlite3",
+#         "NAME": BASE_DIR / "db.sqlite3",
+#     }
+# }
+
+# Add these at the top of your settings.py
+import os
+from dotenv import load_dotenv
+from urllib.parse import urlparse, parse_qsl
+
+load_dotenv()
+
+# Replace the DATABASES section of your settings.py with this
 tmpPostgres = urlparse(os.getenv("DATABASE_URL"))
 
 DATABASES = {
@@ -80,7 +98,7 @@ DATABASES = {
         "PASSWORD": tmpPostgres.password,
         "HOST": tmpPostgres.hostname,
         "PORT": 5432,
-        "OPTIONS": dict(parse_qsl(tmpPostgres.query)) if tmpPostgres.query else {},
+        "OPTIONS": dict(parse_qsl(tmpPostgres.query)),
     }
 }
 
@@ -99,71 +117,48 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+
 LANGUAGE_CODE = "en-us"
+
 TIME_ZONE = "UTC"
+
 USE_I18N = True
+
 USE_TZ = True
 
-# Static files configuration
-STATIC_URL = "/static/"
+
+# Static files (CSS, JavaScript, Images)
+STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Cloudflare R2 Configuration
-USE_S3 = config("USE_S3", cast=bool, default=False)
+CLOUDFLARE_R2_BUCKET = config("CLOUDFLARE_R2_BUCKET", cast=str, default="")
+CLOUDFLARE_R2_ACCESS_KEY = config("CLOUDFLARE_R2_ACCESS_KEY")
+CLOUDFLARE_R2_SECRET_KEY = config("CLOUDFLARE_R2_SECRET_KEY")
+CLOUDFLARE_R2_BUCKET_ENDPOINT = config("CLOUDFLARE_R2_BUCKET_ENDPOINT")
 
-if USE_S3:
-    # Use Cloudflare R2 for production
-    CLOUDFLARE_R2_BUCKET = config("CLOUDFLARE_R2_BUCKET")
-    CLOUDFLARE_R2_ACCESS_KEY = config("CLOUDFLARE_R2_ACCESS_KEY")
-    CLOUDFLARE_R2_SECRET_KEY = config("CLOUDFLARE_R2_SECRET_KEY")
-    CLOUDFLARE_R2_BUCKET_ENDPOINT = config("CLOUDFLARE_R2_BUCKET_ENDPOINT")
+CLOUDFLARE_R2_CONFIG_OPTIONS = {
+    "bucket_name": CLOUDFLARE_R2_BUCKET,
+    "access_key": CLOUDFLARE_R2_ACCESS_KEY,
+    "secret_key": CLOUDFLARE_R2_SECRET_KEY,
+    "endpoint_url": CLOUDFLARE_R2_BUCKET_ENDPOINT,
+    "default_acl": "public-read",
+    "signature_version": "s3v4",
+}
 
-    # Validate that all required R2 settings are present
-    if not all(
-        [
-            CLOUDFLARE_R2_BUCKET,
-            CLOUDFLARE_R2_ACCESS_KEY,
-            CLOUDFLARE_R2_SECRET_KEY,
-            CLOUDFLARE_R2_BUCKET_ENDPOINT,
-        ]
-    ):
-        raise ValueError("Missing required Cloudflare R2 configuration variables")
+STORAGES = {
+    "default": {
+        "BACKEND": "helpers.cloudflare.storages.MediaFileStorage",
+        "OPTIONS": CLOUDFLARE_R2_CONFIG_OPTIONS,
+    },
+    "staticfiles": {
+        "BACKEND": "helpers.cloudflare.storages.StaticFileStorage",
+        "OPTIONS": CLOUDFLARE_R2_CONFIG_OPTIONS,
+    },
+}
 
-    CLOUDFLARE_R2_CONFIG_OPTIONS = {
-        "bucket_name": CLOUDFLARE_R2_BUCKET,
-        "access_key": CLOUDFLARE_R2_ACCESS_KEY,
-        "secret_key": CLOUDFLARE_R2_SECRET_KEY,
-        "endpoint_url": CLOUDFLARE_R2_BUCKET_ENDPOINT,
-        "default_acl": "public-read",
-        "signature_version": "s3v4",
-        "region_name": "auto",  # Add this for Cloudflare R2
-    }
-
-    STORAGES = {
-        "default": {
-            "BACKEND": "helpers.cloudflare.storages.MediaFileStorage",
-            "OPTIONS": CLOUDFLARE_R2_CONFIG_OPTIONS,
-        },
-        "staticfiles": {
-            "BACKEND": "helpers.cloudflare.storages.StaticFileStorage",
-            "OPTIONS": CLOUDFLARE_R2_CONFIG_OPTIONS,
-        },
-    }
-
-    MEDIA_URL = f"https://{CLOUDFLARE_R2_BUCKET}.{CLOUDFLARE_R2_BUCKET_ENDPOINT.split('//')[1]}/media/"
-else:
-    # Use local storage for development
-    STORAGES = {
-        "default": {
-            "BACKEND": "django.core.files.storage.FileSystemStorage",
-        },
-        "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-        },
-    }
-    MEDIA_URL = "/media/"
-
+MEDIA_URL = f"https://{CLOUDFLARE_R2_BUCKET}.{CLOUDFLARE_R2_BUCKET_ENDPOINT.split('//')[1]}/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -198,5 +193,6 @@ REST_FRAMEWORK = {
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
+        # ...
     ),
 }
