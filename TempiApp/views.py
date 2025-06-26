@@ -250,7 +250,7 @@ class SingleApplicationView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_permissions(self):
         if self.request.method == "GET":
-            return [permissions.IsAuthenticated]
+            return [permissions.IsAuthenticated()]
         return [IsCompany]
 
     def get_queryset(self):
