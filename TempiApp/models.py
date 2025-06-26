@@ -133,6 +133,57 @@ class JobAssignment(models.Model):
         return f"{self.user.username}"
 
 
+# Add this simple model to TempiApp/models.py
+
+from django.core.validators import MinValueValidator, MaxValueValidator
+
+
+class Rating(models.Model):
+    """Simple rating system - users rate companies, companies rate users"""
+
+    # Who is giving the rating
+    rater = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="given_ratings"
+    )
+
+    # Who is being rated
+    rated_user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="received_ratings"
+    )
+
+    # Rating value (1-5 stars)
+    rating = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+
+    # Optional comment
+    comment = models.TextField(max_length=500, blank=True, null=True)
+
+    # When rating was created
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # One rating per rater-rated_user pair
+        unique_together = ("rater", "rated_user")
+
+    def __str__(self):
+        return (
+            f"{self.rater.username} rated {self.rated_user.username}: {self.rating}/5"
+        )
+
+    def get_rater_type(self):
+        return (
+            "company" if self.rater.groups.filter(name="Company").exists() else "user"
+        )
+
+    def get_rated_user_type(self):
+        return (
+            "company"
+            if self.rated_user.groups.filter(name="Company").exists()
+            else "user"
+        )
+
+
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
     name = models.CharField(max_length=100, blank=True, null=True)

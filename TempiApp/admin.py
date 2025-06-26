@@ -10,9 +10,12 @@ from .models import (
     Status,
     JobAssignment,
     JobAssignmentStatus,
+    Rating,
 )
 
 # Register your models here.
+admin.site.register(Rating)
+
 admin.site.register(CompanyProfile)
 admin.site.register(UserProfile)
 admin.site.register(Category)

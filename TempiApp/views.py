@@ -16,6 +16,7 @@ from .serializers import (
     JobAssignmentSerializer,
     JobAssignmentStatusSerializer,
     JobAssignmentUpdateSerializer,
+    RatingSerializer,
 )
 from .models import (
     UserProfile,
@@ -28,7 +29,10 @@ from .models import (
     Status,
     JobAssignmentStatus,
     JobAssignment,
+    Rating,
 )
+
+from . import models
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -131,6 +135,14 @@ class JobView(generics.ListAPIView):
     ]
     search_fields = ["title"]
     ordering_fields = ["start_date", "pay"]
+
+    def get_permissions(self):
+        return []
+
+
+class SingleJobView(generics.RetrieveAPIView):
+    queryset = Job.objects.select_related("category", "company", "job_type").all()
+    serializer_class = JobSerializer
 
     def get_permissions(self):
         return []
@@ -391,3 +403,47 @@ class SingleCompanyView(generics.RetrieveAPIView):
 
     def get_permissions(self):
         return []
+
+
+# Add these simple views to TempiApp/views.py
+
+
+class RatingView(generics.ListCreateAPIView):
+    """List and create ratings"""
+
+    serializer_class = RatingSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        # Show ratings user has given or received
+        return Rating.objects.filter(
+            models.Q(rater=self.request.user) | models.Q(rated_user=self.request.user)
+        ).select_related("rater", "rated_user")
+
+
+class SingleRatingView(generics.RetrieveUpdateDestroyAPIView):
+    """View, update, or delete a rating (only your own)"""
+
+    serializer_class = RatingSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        # Only allow editing your own ratings
+        return Rating.objects.filter(rater=self.request.user)
+
+
+class UserRatingsView(generics.ListAPIView):
+    """Public view of ratings for any user/company"""
+
+    serializer_class = RatingSerializer
+
+    def get_queryset(self):
+        user_id = self.kwargs["user_id"]
+        return (
+            Rating.objects.filter(rated_user_id=user_id)
+            .select_related("rater", "rated_user")
+            .order_by("-created_at")
+        )
+
+    def get_permissions(self):
+        return []  # Public endpoint

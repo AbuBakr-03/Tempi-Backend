@@ -14,6 +14,7 @@ from .models import (
     Status,
     JobAssignmentStatus,
     JobAssignment,
+    Rating,
 )
 
 
@@ -53,15 +54,33 @@ class CustomUserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(read_only=True)
     company_profile = CompanyProfileSerializer(read_only=True)
     user_type = serializers.SerializerMethodField()
+    average_rating = serializers.SerializerMethodField()
+    total_ratings = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "profile", "company_profile", "user_type"]
+        fields = [
+            "id",
+            "username",
+            "email",
+            "profile",
+            "company_profile",
+            "user_type",
+            "average_rating",
+            "total_ratings",
+        ]
 
     def get_user_type(self, obj):
-        if obj.groups.filter(name="Company").exists():
-            return "company"
-        return "user"
+        return "company" if obj.groups.filter(name="Company").exists() else "user"
+
+    def get_average_rating(self, obj):
+        ratings = obj.received_ratings.all()
+        if ratings:
+            return round(sum(r.rating for r in ratings) / len(ratings), 1)
+        return 0
+
+    def get_total_ratings(self, obj):
+        return obj.received_ratings.count()
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -238,3 +257,43 @@ class JobAssignmentUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = JobAssignment
         fields = ["status"]
+
+
+class RatingSerializer(serializers.ModelSerializer):
+    rater_name = serializers.CharField(source="rater.username", read_only=True)
+    rated_user_name = serializers.CharField(
+        source="rated_user.username", read_only=True
+    )
+    rater_type = serializers.SerializerMethodField()
+    rated_user_type = serializers.SerializerMethodField()
+    rated_user_id = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = Rating
+        fields = [
+            "id",
+            "rating",
+            "comment",
+            "rated_user_id",
+            "rater_name",
+            "rated_user_name",
+            "rater_type",
+            "rated_user_type",
+            "created_at",
+        ]
+
+    def validate_rated_user_id(self, value):
+        request = self.context.get("request")
+        if request and request.user.id == value:
+            raise serializers.ValidationError("You cannot rate yourself")
+        return value
+
+    def create(self, validated_data):
+        validated_data["rater"] = self.context["request"].user
+        return super().create(validated_data)
+
+    def get_rater_type(self, obj):
+        return obj.get_rater_type()
+
+    def get_rated_user_type(self, obj):
+        return obj.get_rated_user_type()
