@@ -31,6 +31,8 @@ urlpatterns = [
     # Application endpoints
     path("application/", views.ApplicationView.as_view()),
     path("application/<int:pk>/", views.SingleApplicationView.as_view()),
+    path("status/", views.StatusView.as_view()),
+    path("status/<int:pk>/", views.SingleStatusView.as_view()),
     # Job Assignment endpoints
     path("assignments/", views.JobAssignmentView.as_view()),
     path(
