@@ -19,9 +19,27 @@ class CompanyProfile(models.Model):
     established_date = models.DateField(blank=True, null=True)
     employee_count = models.PositiveIntegerField(blank=True, null=True)
     industry = models.CharField(max_length=255, blank=True, null=True)
+    has_best_employer_badge = models.BooleanField(default=False)
+    badge_earned_date = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.name} Profile"
+    
+    def update_badge_status(self):
+        """Update badge status based on average rating"""
+        from django.utils import timezone
+        
+        ratings = self.user.received_ratings.all()
+        if ratings:
+            avg_rating = sum(r.rating for r in ratings) / len(ratings)
+            if avg_rating >= 4.5 and not self.has_best_employer_badge:
+                self.has_best_employer_badge = True
+                self.badge_earned_date = timezone.now()
+                self.save()
+            elif avg_rating < 4.5 and self.has_best_employer_badge:
+                self.has_best_employer_badge = False
+                self.badge_earned_date = None
+                self.save()
 
 
 class Category(models.Model):
@@ -108,6 +126,37 @@ class Application(models.Model):
             models.Index(fields=["status"]),
         ]
 
+    def __str__(self):
+        return f"{self.user.username} - {self.job.title}"
+
+    def is_pending(self):
+        """Check if application is pending"""
+        return self.status.id == 1
+
+    def is_shortlisted(self):
+        """Check if application is shortlisted"""
+        return self.status.id == 4
+
+    def is_approved(self):
+        """Check if application is approved"""
+        return self.status.id == 2
+
+    def is_rejected(self):
+        """Check if application is rejected"""
+        return self.status.id == 3
+
+    def can_be_shortlisted(self):
+        """Check if application can be shortlisted (must be pending)"""
+        return self.is_pending()
+
+    def can_be_approved(self):
+        """Check if application can be approved (must be pending or shortlisted)"""
+        return self.is_pending() or self.is_shortlisted()
+
+    def can_be_rejected(self):
+        """Check if application can be rejected (must be pending or shortlisted)"""
+        return self.is_pending() or self.is_shortlisted()
+
 
 class JobAssignmentStatus(models.Model):
     name = models.CharField(max_length=255)
@@ -136,6 +185,8 @@ class JobAssignment(models.Model):
 # Add this simple model to TempiApp/models.py
 
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 
 
 class Rating(models.Model):
@@ -183,6 +234,25 @@ class Rating(models.Model):
             else "user"
         )
 
+    @classmethod
+    def can_rate_each_other(cls, user1, user2):
+        """
+        Check if two users can rate each other based on completed job assignments.
+        Returns True if they have completed a task together.
+        """
+        from django.db.models import Q
+        
+        # Look for completed assignments where:
+        # 1. One user is the worker and the other is the company
+        # 2. Status is "Completed" (status_id = 3)
+        completed_assignments = JobAssignment.objects.filter(
+            Q(user=user1, job__company=user2) |  # User1 worked for User2's company
+            Q(user=user2, job__company=user1),   # User2 worked for User1's company
+            status_id=3  # Completed status
+        )
+        
+        return completed_assignments.exists()
+
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
@@ -196,9 +266,39 @@ class UserProfile(models.Model):
         upload_to="profile_pics/", blank=True, null=True
     )
     resume = models.FileField(upload_to="resumes/", blank=True, null=True)
+    has_best_tempi_badge = models.BooleanField(default=False)
+    badge_earned_date = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.user.username}'s Profile"
+    
+    def update_badge_status(self):
+        """Update badge status based on average rating"""
+        from django.utils import timezone
+        
+        ratings = self.user.received_ratings.all()
+        if ratings:
+            avg_rating = sum(r.rating for r in ratings) / len(ratings)
+            if avg_rating >= 4.5 and not self.has_best_tempi_badge:
+                self.has_best_tempi_badge = True
+                self.badge_earned_date = timezone.now()
+                self.save()
+            elif avg_rating < 4.5 and self.has_best_tempi_badge:
+                self.has_best_tempi_badge = False
+                self.badge_earned_date = None
+                self.save()
 
 
-# No signals needed - profile creation is handled in the serializer
+# Signal handlers for automatic badge updates
+@receiver([post_save, post_delete], sender=Rating)
+def update_badge_on_rating_change(sender, instance, **kwargs):
+    """Update badge status when a rating is created, updated, or deleted"""
+    rated_user = instance.rated_user
+    
+    # Update user profile badge if user has a profile
+    if hasattr(rated_user, 'profile'):
+        rated_user.profile.update_badge_status()
+    
+    # Update company profile badge if user is a company
+    if hasattr(rated_user, 'company_profile'):
+        rated_user.company_profile.update_badge_status()

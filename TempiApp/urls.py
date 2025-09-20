@@ -54,4 +54,6 @@ urlpatterns = [
         views.UserRatingsView.as_view(),
         name="user_ratings",
     ),
+    # Admin badge management endpoint
+    path("admin/update-badges/", views.BadgeUpdateView.as_view(), name="update_badges"),
 ]

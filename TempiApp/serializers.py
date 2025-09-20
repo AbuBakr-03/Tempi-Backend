@@ -16,6 +16,7 @@ from .models import (
     JobAssignment,
     Rating,
 )
+from django.db import models
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -30,6 +31,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "phone_number",
             "profile_picture",
             "resume",
+            "has_best_tempi_badge",
+            "badge_earned_date",
         ]
 
 
@@ -47,6 +50,8 @@ class CompanyProfileSerializer(serializers.ModelSerializer):
             "established_date",
             "employee_count",
             "industry",
+            "has_best_employer_badge",
+            "badge_earned_date",
         ]
 
 
@@ -215,6 +220,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
     status = StatusSerializer(read_only=True)
     job = JobSerializer(read_only=True)
     job_id = serializers.IntegerField(write_only=True)
+    status_id = serializers.IntegerField(write_only=True, required=False)
 
     class Meta:
         model = Application
@@ -228,7 +234,41 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "status",
             "job",
             "job_id",
+            "status_id",
         ]
+
+    def validate(self, data):
+        """
+        Validate application status transitions
+        """
+        request = self.context.get("request")
+        if not request:
+            return data
+
+        # If this is an update operation
+        if self.instance:
+            new_status_id = data.get('status_id')
+            if new_status_id:
+                current_status = self.instance.status.id
+                
+                # Validate status transitions
+                if current_status == 2:  # Already approved
+                    raise serializers.ValidationError(
+                        "Cannot change status of an approved application"
+                    )
+                
+                if current_status == 3:  # Already rejected
+                    raise serializers.ValidationError(
+                        "Cannot change status of a rejected application"
+                    )
+                
+                # Only allow transitions from pending (1) or shortlisted (4)
+                if current_status not in [1, 4]:
+                    raise serializers.ValidationError(
+                        "Invalid status transition"
+                    )
+
+        return data
 
 
 class JobAssignmentStatusSerializer(serializers.ModelSerializer):
@@ -287,6 +327,34 @@ class RatingSerializer(serializers.ModelSerializer):
         if request and request.user.id == value:
             raise serializers.ValidationError("You cannot rate yourself")
         return value
+
+    def validate(self, data):
+        """
+        Validate that the rater and rated user have completed a task together
+        """
+        request = self.context.get("request")
+        if not request:
+            raise serializers.ValidationError("Request context is required")
+        
+        rater = request.user
+        rated_user_id = data.get('rated_user_id')
+        
+        # Get the rated user object
+        from .models import User
+        try:
+            rated_user = User.objects.get(id=rated_user_id)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Rated user does not exist")
+        
+        # Check if they can rate each other based on completed job assignments
+        from .models import Rating
+        if not Rating.can_rate_each_other(rater, rated_user):
+            raise serializers.ValidationError(
+                "You can only rate users/companies with whom you have completed a task. "
+                "Both parties must have worked together on a completed job assignment."
+            )
+        
+        return data
 
     def create(self, validated_data):
         validated_data["rater"] = self.context["request"].user

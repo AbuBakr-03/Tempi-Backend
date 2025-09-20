@@ -36,6 +36,9 @@ from . import models
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework import serializers
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -150,7 +153,7 @@ class SingleJobView(generics.RetrieveAPIView):
 
 class DashboardJobView(generics.ListCreateAPIView):
     serializer_class = JobSerializer
-    permission_classes = [IsCompany]
+    permission_classes = [IsCompany()]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = [
         "category__name",
@@ -176,7 +179,7 @@ class DashboardJobView(generics.ListCreateAPIView):
 
 class SingleDashboardJobView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = JobSerializer
-    permission_classes = [IsCompany]
+    permission_classes = [IsCompany()]
 
     def get_queryset(self):
         if self.request.user.is_staff:
@@ -263,7 +266,7 @@ class SingleApplicationView(generics.RetrieveUpdateDestroyAPIView):
     def get_permissions(self):
         if self.request.method == "GET":
             return [permissions.IsAuthenticated()]
-        return [IsCompany]
+        return [IsCompany()]
 
     def get_queryset(self):
         user = self.request.user
@@ -287,6 +290,8 @@ class SingleApplicationView(generics.RetrieveUpdateDestroyAPIView):
         if user.is_staff or application.job.company == user:
             updated_application = serializer.save()
             current_application_id = updated_application.id
+            
+            # If application is approved (status_id == 2), create job assignment and reject all others
             if updated_application.status.id == 2:
                 JobAssignment.objects.get_or_create(
                     user=updated_application.user,
@@ -294,10 +299,15 @@ class SingleApplicationView(generics.RetrieveUpdateDestroyAPIView):
                     application=updated_application,
                     status=JobAssignmentStatus.objects.get(pk=1),
                 )
+                # Reject all other applications (including shortlisted ones)
                 other_applications = Application.objects.filter(
                     job=updated_application.job
                 ).exclude(id=current_application_id)
                 other_applications.update(status_id=3)
+            
+            # If application is shortlisted (status_id == 4), no automatic actions needed
+            # Companies can shortlist multiple applicants before making final decision
+            # If application is approved (status_id == 2), it creates job assignment and rejects others
 
     def perform_destroy(self, instance):
         user = self.request.user
@@ -420,6 +430,23 @@ class RatingView(generics.ListCreateAPIView):
             models.Q(rater=self.request.user) | models.Q(rated_user=self.request.user)
         ).select_related("rater", "rated_user")
 
+    def create(self, request, *args, **kwargs):
+        """
+        Override create method to provide better error handling for rating restrictions
+        """
+        try:
+            return super().create(request, *args, **kwargs)
+        except serializers.ValidationError as e:
+            # Return a more user-friendly error response
+            return Response(
+                {
+                    "error": "Rating restriction",
+                    "message": str(e),
+                    "detail": "You can only rate users/companies with whom you have completed a task together."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
 
 class SingleRatingView(generics.RetrieveUpdateDestroyAPIView):
     """View, update, or delete a rating (only your own)"""
@@ -447,3 +474,35 @@ class UserRatingsView(generics.ListAPIView):
 
     def get_permissions(self):
         return []  # Public endpoint
+
+
+
+
+
+class BadgeUpdateView(generics.GenericAPIView):
+    """Update badge status for all users and companies"""
+    
+    permission_classes = [permissions.IsAdminUser]
+    
+    def post(self, request):
+        """Update badge status for all users and companies"""
+        from .models import UserProfile, CompanyProfile
+        
+        updated_count = 0
+        
+        # Update user badges
+        user_profiles = UserProfile.objects.all()
+        for profile in user_profiles:
+            profile.update_badge_status()
+            updated_count += 1
+        
+        # Update company badges
+        company_profiles = CompanyProfile.objects.all()
+        for profile in company_profiles:
+            profile.update_badge_status()
+            updated_count += 1
+        
+        return Response({
+            'message': f'Badge status updated for {updated_count} profiles',
+            'updated_count': updated_count
+        }, status=status.HTTP_200_OK)
